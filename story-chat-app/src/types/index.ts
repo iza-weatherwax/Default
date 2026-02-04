@@ -83,12 +83,13 @@ export interface AppSettings {
   tokenBudget: number;
   apiKey: string;
   apiProvider: 'anthropic' | 'openrouter' | 'local';
-  apiBaseUrl?: string;
+  apiBaseUrl: string;
   modelName: string;
   enableSemanticSearch: boolean;
   enableAutoCorrection: boolean;
   enableDuplicationCheck: boolean;
   embeddingModel: string;
+  systemPrompt?: string;
   updatedAt: Date;
 }
 

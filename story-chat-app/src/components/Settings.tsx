@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Settings as SettingsIcon, Save, AlertCircle, Eye, EyeOff } from 'lucide-react';
+import { Settings as SettingsIcon, Save, AlertCircle, Eye, EyeOff, Zap, CheckCircle, XCircle, Loader2 } from 'lucide-react';
 import { useAppStore } from '../stores/useAppStore';
 import clsx from 'clsx';
 
@@ -26,9 +26,11 @@ const MODELS = {
 };
 
 export const Settings: React.FC = () => {
-  const { settings, updateSettings } = useAppStore();
+  const { settings, updateSettings, testConnection } = useAppStore();
   const [showApiKey, setShowApiKey] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
 
   const [formData, setFormData] = useState({
     temperature: 0.7,
@@ -36,12 +38,13 @@ export const Settings: React.FC = () => {
     tokenBudget: 5000,
     apiKey: '',
     apiProvider: 'anthropic' as 'anthropic' | 'openrouter' | 'local',
-    apiBaseUrl: '',
+    apiBaseUrl: 'https://api.anthropic.com',
     modelName: 'claude-3-5-sonnet-20241022',
     enableSemanticSearch: true,
     enableAutoCorrection: true,
     enableDuplicationCheck: true,
     embeddingModel: 'transformers.js',
+    systemPrompt: '',
   });
 
   useEffect(() => {
@@ -52,12 +55,13 @@ export const Settings: React.FC = () => {
         tokenBudget: settings.tokenBudget,
         apiKey: settings.apiKey,
         apiProvider: settings.apiProvider,
-        apiBaseUrl: settings.apiBaseUrl || '',
+        apiBaseUrl: settings.apiBaseUrl || 'https://api.anthropic.com',
         modelName: settings.modelName,
         enableSemanticSearch: settings.enableSemanticSearch,
         enableAutoCorrection: settings.enableAutoCorrection,
         enableDuplicationCheck: settings.enableDuplicationCheck,
         embeddingModel: settings.embeddingModel,
+        systemPrompt: settings.systemPrompt || '',
       });
     }
   }, [settings]);
@@ -69,17 +73,57 @@ export const Settings: React.FC = () => {
     setTimeout(() => setSaved(false), 2000);
   };
 
+  const handleTestConnection = async () => {
+    setTesting(true);
+    setTestResult(null);
+
+    try {
+      const result = await testConnection();
+      setTestResult(result);
+
+      setTimeout(() => {
+        setTestResult(null);
+      }, 5000);
+    } catch (error) {
+      setTestResult({
+        success: false,
+        message: 'Erro ao testar conexão',
+      });
+    } finally {
+      setTesting(false);
+    }
+  };
+
+  const isUsingCustomProxy = () => {
+    const baseUrl = formData.apiBaseUrl || '';
+    return !baseUrl.includes('anthropic.com') &&
+           !baseUrl.includes('openrouter') &&
+           (baseUrl.includes('localhost') ||
+            baseUrl.includes('127.0.0.1') ||
+            baseUrl.startsWith('http://'));
+  };
+
   const currentModels = MODELS[formData.apiProvider];
 
   return (
     <div className="flex flex-col h-full bg-gray-50">
       {/* Header */}
       <div className="bg-white border-b border-gray-200 p-4 safe-top">
-        <div className="flex items-center gap-2">
-          <SettingsIcon className="w-6 h-6 text-gray-700" />
-          <h1 className="text-xl font-bold text-gray-900">
-            Configurações
-          </h1>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <SettingsIcon className="w-6 h-6 text-gray-700" />
+            <h1 className="text-xl font-bold text-gray-900">
+              Configurações
+            </h1>
+          </div>
+          {isUsingCustomProxy() && (
+            <div className="flex items-center gap-1.5 px-2.5 py-1 bg-blue-50 border border-blue-200 rounded-full">
+              <Zap className="w-3.5 h-3.5 text-blue-600" />
+              <span className="text-xs font-medium text-blue-700">
+                Proxy Local
+              </span>
+            </div>
+          )}
         </div>
       </div>
 
@@ -164,20 +208,67 @@ export const Settings: React.FC = () => {
               )}
             </div>
 
-            {formData.apiProvider === 'openrouter' && (
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Base URL (Opcional)
-                </label>
-                <input
-                  type="text"
-                  value={formData.apiBaseUrl}
-                  onChange={(e) => setFormData({ ...formData, apiBaseUrl: e.target.value })}
-                  placeholder="https://openrouter.ai/api/v1"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-sm"
-                />
-              </div>
-            )}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                API Base URL
+              </label>
+              <input
+                type="text"
+                value={formData.apiBaseUrl}
+                onChange={(e) => setFormData({ ...formData, apiBaseUrl: e.target.value })}
+                placeholder="https://api.anthropic.com"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-sm"
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                Para proxy local, use: http://localhost:porta ou http://127.0.0.1:porta
+              </p>
+            </div>
+
+            {/* Test Connection Button */}
+            <div>
+              <button
+                type="button"
+                onClick={handleTestConnection}
+                disabled={testing || !formData.apiKey}
+                className={clsx(
+                  'w-full py-2.5 rounded-lg font-medium flex items-center justify-center gap-2 transition-colors',
+                  testing
+                    ? 'bg-gray-300 text-gray-600 cursor-not-allowed'
+                    : testResult?.success
+                    ? 'bg-green-500 text-white'
+                    : testResult?.success === false
+                    ? 'bg-red-500 text-white'
+                    : 'bg-blue-500 hover:bg-blue-600 text-white'
+                )}
+              >
+                {testing ? (
+                  <>
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                    Testando...
+                  </>
+                ) : testResult?.success ? (
+                  <>
+                    <CheckCircle className="w-5 h-5" />
+                    {testResult.message}
+                  </>
+                ) : testResult?.success === false ? (
+                  <>
+                    <XCircle className="w-5 h-5" />
+                    Falhou
+                  </>
+                ) : (
+                  <>
+                    <Zap className="w-5 h-5" />
+                    Testar Conexão
+                  </>
+                )}
+              </button>
+              {testResult && !testResult.success && (
+                <p className="text-xs text-red-600 mt-1">
+                  {testResult.message}
+                </p>
+              )}
+            </div>
           </div>
         </section>
 
@@ -251,6 +342,21 @@ export const Settings: React.FC = () => {
               />
               <p className="text-xs text-gray-500 mt-1">
                 Quantos tokens podem ser usados para memórias e contexto
+              </p>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Prompt do Sistema (Opcional)
+              </label>
+              <textarea
+                value={formData.systemPrompt}
+                onChange={(e) => setFormData({ ...formData, systemPrompt: e.target.value })}
+                placeholder="Instruções personalizadas para a IA... (deixe vazio para usar o padrão)"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                rows={4}
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                Define como a IA deve se comportar. Deixe vazio para usar as instruções padrão.
               </p>
             </div>
           </div>

@@ -61,6 +61,7 @@ interface AppState {
   // Settings actions
   updateSettings: (updates: Partial<AppSettings>) => Promise<void>;
   loadSettings: () => Promise<void>;
+  testConnection: () => Promise<{ success: boolean; message: string; latency?: number }>;
 
   // UI actions
   setView: (view: AppState['currentView']) => void;
@@ -204,7 +205,8 @@ export const useAppStore = create<AppState>((set, get) => ({
       // Generate response
       const response = await aiService.generateResponse(
         [...state.messages, userMessage],
-        contextString
+        contextString,
+        state.settings.systemPrompt || undefined
       );
 
       // Validate response
@@ -404,8 +406,8 @@ export const useAppStore = create<AppState>((set, get) => ({
       await db.settings.update(state.settings.id!, newSettings);
 
       // Update AI service if API settings changed
-      if (updates.apiKey || updates.apiProvider || updates.modelName) {
-        const aiService = newSettings.apiKey
+      if (updates.apiKey || updates.apiProvider || updates.modelName || updates.apiBaseUrl) {
+        const aiService = newSettings.apiKey || newSettings.apiBaseUrl
           ? new AIService(newSettings)
           : new MockAIService(newSettings);
         set({ aiService });
@@ -440,6 +442,27 @@ export const useAppStore = create<AppState>((set, get) => ({
       }
     } catch (error) {
       set({ error: error instanceof Error ? error.message : 'Failed to load settings' });
+    }
+  },
+
+  testConnection: async () => {
+    const state = get();
+
+    if (!state.aiService) {
+      return {
+        success: false,
+        message: 'Serviço de IA não inicializado',
+      };
+    }
+
+    try {
+      const result = await state.aiService.testConnection();
+      return result;
+    } catch (error) {
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : 'Erro ao testar conexão',
+      };
     }
   },
 

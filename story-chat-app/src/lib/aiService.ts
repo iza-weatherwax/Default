@@ -16,27 +16,62 @@ export class AIService {
   }
 
   private initializeClient(): void {
-    if (!this.settings.apiKey) {
+    const isCustomProxy = this.isCustomProxy();
+    const apiKey = isCustomProxy && !this.settings.apiKey
+      ? 'sk-dummy'
+      : this.settings.apiKey;
+
+    if (!apiKey) {
       console.warn('API key not set');
       return;
     }
 
-    if (this.settings.apiProvider === 'anthropic') {
-      this.client = new Anthropic({
-        apiKey: this.settings.apiKey,
-        dangerouslyAllowBrowser: true,
-      });
-    } else if (this.settings.apiProvider === 'openrouter') {
-      this.client = new Anthropic({
-        apiKey: this.settings.apiKey,
-        baseURL: this.settings.apiBaseUrl || 'https://openrouter.ai/api/v1',
-        dangerouslyAllowBrowser: true,
-        defaultHeaders: {
-          'HTTP-Referer': window.location.origin,
-          'X-Title': 'Story Chat App',
-        },
-      });
+    const baseURL = this.getBaseURL();
+    const defaultHeaders: Record<string, string> = {
+      'anthropic-version': '2023-06-01',
+    };
+
+    // Add provider-specific headers
+    if (this.settings.apiProvider === 'openrouter') {
+      defaultHeaders['HTTP-Referer'] = window.location.origin;
+      defaultHeaders['X-Title'] = 'Story Chat App';
     }
+
+    this.client = new Anthropic({
+      apiKey,
+      baseURL,
+      dangerouslyAllowBrowser: true,
+      defaultHeaders,
+    });
+  }
+
+  private getBaseURL(): string {
+    const baseUrl = this.settings.apiBaseUrl || 'https://api.anthropic.com';
+
+    // Ensure URL ends with /v1 for Anthropic-compatible APIs
+    if (baseUrl.includes('anthropic.com')) {
+      return baseUrl.endsWith('/v1') ? baseUrl : `${baseUrl}/v1`;
+    }
+
+    if (baseUrl.includes('openrouter')) {
+      return baseUrl.endsWith('/v1') ? baseUrl : `${baseUrl}/v1`;
+    }
+
+    // For custom proxies, assume they handle the /v1/messages path
+    return baseUrl;
+  }
+
+  private isCustomProxy(): boolean {
+    const baseUrl = this.settings.apiBaseUrl || '';
+    return !baseUrl.includes('anthropic.com') &&
+           !baseUrl.includes('openrouter') &&
+           (baseUrl.includes('localhost') ||
+            baseUrl.includes('127.0.0.1') ||
+            baseUrl.startsWith('http://'));
+  }
+
+  isUsingCustomProxy(): boolean {
+    return this.isCustomProxy();
   }
 
   updateSettings(settings: AppSettings): void {
@@ -132,6 +167,59 @@ Diretrizes:
     outputTokens: number
   ): number {
     return calculateCost(inputTokens, outputTokens, this.settings.modelName);
+  }
+
+  /**
+   * Test connection to the API
+   */
+  async testConnection(): Promise<{ success: boolean; message: string; latency?: number }> {
+    const startTime = Date.now();
+
+    try {
+      if (!this.client) {
+        return {
+          success: false,
+          message: 'Cliente não inicializado. Configure a API key primeiro.',
+        };
+      }
+
+      // Send a minimal test message
+      const response = await this.client.messages.create({
+        model: this.settings.modelName,
+        max_tokens: 10,
+        temperature: 0,
+        messages: [
+          {
+            role: 'user',
+            content: 'Hi',
+          },
+        ],
+      });
+
+      const latency = Date.now() - startTime;
+
+      if (response.content && response.content.length > 0) {
+        return {
+          success: true,
+          message: `Conexão bem-sucedida! Latência: ${latency}ms`,
+          latency,
+        };
+      }
+
+      return {
+        success: false,
+        message: 'Resposta inesperada da API',
+      };
+    } catch (error) {
+      const latency = Date.now() - startTime;
+      const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido';
+
+      return {
+        success: false,
+        message: `Erro na conexão: ${errorMessage}`,
+        latency,
+      };
+    }
   }
 }
 

@@ -43,11 +43,13 @@ export class StoryDatabase extends Dexie {
         tokenBudget: 5000,
         apiKey: '',
         apiProvider: 'anthropic',
+        apiBaseUrl: 'https://api.anthropic.com',
         modelName: 'claude-3-5-sonnet-20241022',
         enableSemanticSearch: true,
         enableAutoCorrection: true,
         enableDuplicationCheck: true,
         embeddingModel: 'transformers.js',
+        systemPrompt: '',
         updatedAt: new Date(),
       });
     }
