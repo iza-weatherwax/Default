@@ -407,7 +407,14 @@ export const useAppStore = create<AppState>((set, get) => ({
 
       // Update AI service if API settings changed
       if (updates.apiKey || updates.apiProvider || updates.modelName || updates.apiBaseUrl) {
-        const aiService = newSettings.apiKey || newSettings.apiBaseUrl
+        // Use real AI service if:
+        // 1. Has API key, OR
+        // 2. Using custom proxy (baseURL is not default Anthropic)
+        const isCustomProxy = newSettings.apiBaseUrl &&
+                              newSettings.apiBaseUrl !== 'https://api.anthropic.com' &&
+                              !newSettings.apiBaseUrl.includes('anthropic.com');
+
+        const aiService = newSettings.apiKey || isCustomProxy
           ? new AIService(newSettings)
           : new MockAIService(newSettings);
         set({ aiService });
@@ -427,7 +434,14 @@ export const useAppStore = create<AppState>((set, get) => ({
         set({ settings: currentSettings });
 
         // Initialize AI service
-        const aiService = currentSettings.apiKey
+        // Use real AI service if:
+        // 1. Has API key, OR
+        // 2. Using custom proxy (baseURL is not default Anthropic)
+        const isCustomProxy = currentSettings.apiBaseUrl &&
+                              currentSettings.apiBaseUrl !== 'https://api.anthropic.com' &&
+                              !currentSettings.apiBaseUrl.includes('anthropic.com');
+
+        const aiService = currentSettings.apiKey || isCustomProxy
           ? new AIService(currentSettings)
           : new MockAIService(currentSettings);
         set({ aiService });

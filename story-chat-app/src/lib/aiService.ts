@@ -23,11 +23,20 @@ export class AIService {
 
     // For custom proxies, always initialize even without a real API key
     if (!apiKey && !isCustomProxy) {
-      console.warn('API key not set');
+      console.warn('[AIService] API key not set');
       return;
     }
 
     const baseURL = this.getBaseURL();
+
+    console.log('[AIService] Initializing client:', {
+      provider: this.settings.apiProvider,
+      baseURL,
+      hasRealApiKey: !!this.settings.apiKey && this.settings.apiKey !== 'sk-dummy',
+      isCustomProxy,
+      model: this.settings.modelName,
+    });
+
     const defaultHeaders: Record<string, string> = {
       'anthropic-version': '2023-06-01',
     };
@@ -44,22 +53,43 @@ export class AIService {
       dangerouslyAllowBrowser: true,
       defaultHeaders,
     });
+
+    console.log('[AIService] Client initialized successfully');
   }
 
   private getBaseURL(): string {
     const baseUrl = this.settings.apiBaseUrl || 'https://api.anthropic.com';
 
-    // Ensure URL ends with /v1 for Anthropic-compatible APIs
-    if (baseUrl.includes('anthropic.com')) {
-      return baseUrl.endsWith('/v1') ? baseUrl : `${baseUrl}/v1`;
+    // Remove trailing slashes
+    const cleanUrl = baseUrl.replace(/\/+$/, '');
+
+    // For Anthropic official API, use the base URL as-is
+    // The SDK automatically appends /v1/messages
+    if (cleanUrl.includes('anthropic.com')) {
+      // Remove /v1 if it exists, SDK will add it
+      return cleanUrl.replace(/\/v1$/, '');
     }
 
-    if (baseUrl.includes('openrouter')) {
-      return baseUrl.endsWith('/v1') ? baseUrl : `${baseUrl}/v1`;
+    // For OpenRouter, the full path should be /api/v1
+    // OpenRouter expects: https://openrouter.ai/api/v1
+    // The SDK will append /messages making it /api/v1/messages
+    if (cleanUrl.includes('openrouter')) {
+      // Ensure it has /api/v1 but not more
+      if (cleanUrl.endsWith('/api/v1')) {
+        return cleanUrl;
+      }
+      if (cleanUrl.endsWith('/api')) {
+        return `${cleanUrl}/v1`;
+      }
+      // Default OpenRouter URL
+      return 'https://openrouter.ai/api/v1';
     }
 
-    // For custom proxies, assume they handle the /v1/messages path
-    return baseUrl;
+    // For custom proxies:
+    // - If proxy expects /v1/messages, use base URL (SDK adds it)
+    // - If proxy expects /messages only, add /v1 to the base
+    // - Most Anthropic-compatible proxies expect the SDK to add /v1/messages
+    return cleanUrl;
   }
 
   private isCustomProxy(): boolean {
@@ -176,13 +206,18 @@ Diretrizes:
   async testConnection(): Promise<{ success: boolean; message: string; latency?: number }> {
     const startTime = Date.now();
 
+    console.log('[AIService] Testing connection...');
+
     try {
       if (!this.client) {
+        console.error('[AIService] Client not initialized');
         return {
           success: false,
-          message: 'Cliente não inicializado. Configure a API key primeiro.',
+          message: 'Cliente não inicializado.',
         };
       }
+
+      console.log('[AIService] Sending test request to:', this.getBaseURL());
 
       // Send a minimal test message
       const response = await this.client.messages.create({
@@ -198,6 +233,12 @@ Diretrizes:
       });
 
       const latency = Date.now() - startTime;
+
+      console.log('[AIService] Test response received:', {
+        latency,
+        model: response.model,
+        hasContent: response.content && response.content.length > 0,
+      });
 
       if (response.content && response.content.length > 0) {
         return {
@@ -215,9 +256,15 @@ Diretrizes:
       const latency = Date.now() - startTime;
       const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido';
 
+      console.error('[AIService] Test connection error:', {
+        error: errorMessage,
+        latency,
+        stack: error instanceof Error ? error.stack : undefined,
+      });
+
       return {
         success: false,
-        message: `Erro na conexão: ${errorMessage}`,
+        message: `Erro: ${errorMessage}`,
         latency,
       };
     }
