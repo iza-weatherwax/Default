@@ -78,6 +78,13 @@ export const Settings: React.FC = () => {
     setTestResult(null);
 
     try {
+      // Salvar as configurações primeiro para garantir que o aiService usa os valores corretos
+      await updateSettings(formData);
+
+      // Aguardar um pouco para o aiService ser atualizado
+      await new Promise(resolve => setTimeout(resolve, 100));
+
+      // Testar a conexão
       const result = await testConnection();
       setTestResult(result);
 
@@ -87,7 +94,7 @@ export const Settings: React.FC = () => {
     } catch (error) {
       setTestResult({
         success: false,
-        message: 'Erro ao testar conexão',
+        message: error instanceof Error ? error.message : 'Erro ao testar conexão',
       });
     } finally {
       setTesting(false);
@@ -229,7 +236,7 @@ export const Settings: React.FC = () => {
               <button
                 type="button"
                 onClick={handleTestConnection}
-                disabled={testing || !formData.apiKey}
+                disabled={testing}
                 className={clsx(
                   'w-full py-2.5 rounded-lg font-medium flex items-center justify-center gap-2 transition-colors',
                   testing

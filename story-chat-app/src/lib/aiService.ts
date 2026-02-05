@@ -21,7 +21,8 @@ export class AIService {
       ? 'sk-dummy'
       : this.settings.apiKey;
 
-    if (!apiKey) {
+    // For custom proxies, always initialize even without a real API key
+    if (!apiKey && !isCustomProxy) {
       console.warn('API key not set');
       return;
     }
@@ -38,7 +39,7 @@ export class AIService {
     }
 
     this.client = new Anthropic({
-      apiKey,
+      apiKey: apiKey || 'sk-dummy',
       baseURL,
       dangerouslyAllowBrowser: true,
       defaultHeaders,
