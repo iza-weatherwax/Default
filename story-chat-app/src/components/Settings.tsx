@@ -77,21 +77,32 @@ export const Settings: React.FC = () => {
     setTesting(true);
     setTestResult(null);
 
+    console.log('[Settings] Testing connection with config:', {
+      provider: formData.apiProvider,
+      baseUrl: formData.apiBaseUrl,
+      model: formData.modelName,
+      hasApiKey: !!formData.apiKey,
+    });
+
     try {
       // Salvar as configurações primeiro para garantir que o aiService usa os valores corretos
+      console.log('[Settings] Saving settings before test...');
       await updateSettings(formData);
 
       // Aguardar um pouco para o aiService ser atualizado
-      await new Promise(resolve => setTimeout(resolve, 100));
+      await new Promise(resolve => setTimeout(resolve, 200));
 
       // Testar a conexão
+      console.log('[Settings] Calling testConnection...');
       const result = await testConnection();
+      console.log('[Settings] Test result:', result);
       setTestResult(result);
 
       setTimeout(() => {
         setTestResult(null);
       }, 5000);
     } catch (error) {
+      console.error('[Settings] Test error:', error);
       setTestResult({
         success: false,
         message: error instanceof Error ? error.message : 'Erro ao testar conexão',
@@ -151,10 +162,20 @@ export const Settings: React.FC = () => {
                 value={formData.apiProvider}
                 onChange={(e) => {
                   const provider = e.target.value as typeof formData.apiProvider;
+
+                  // Set default API Base URL for each provider
+                  let defaultBaseUrl = 'https://api.anthropic.com';
+                  if (provider === 'openrouter') {
+                    defaultBaseUrl = 'https://openrouter.ai/api/v1';
+                  } else if (provider === 'local') {
+                    defaultBaseUrl = 'http://localhost:8000';
+                  }
+
                   setFormData({
                     ...formData,
                     apiProvider: provider,
                     modelName: MODELS[provider][0].value,
+                    apiBaseUrl: defaultBaseUrl,
                   });
                 }}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -227,7 +248,9 @@ export const Settings: React.FC = () => {
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-sm"
               />
               <p className="text-xs text-gray-500 mt-1">
-                Para proxy local, use: http://localhost:porta ou http://127.0.0.1:porta
+                {formData.apiProvider === 'anthropic' && 'Padrão: https://api.anthropic.com'}
+                {formData.apiProvider === 'openrouter' && 'Padrão: https://openrouter.ai/api/v1'}
+                {formData.apiProvider === 'local' && 'Exemplo: http://localhost:8000 ou http://127.0.0.1:porta'}
               </p>
             </div>
 
