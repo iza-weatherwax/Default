@@ -1,0 +1,13 @@
+{
+  "name": "novel-prompter",
+  "version": "2.0.0",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "Novel Prompter - a web-based writing tool for creating book outlines and AI prompts"
+}
